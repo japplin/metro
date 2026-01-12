@@ -72,6 +72,10 @@ kotlin {
   }
 }
 
+metro {
+  interop.contributesIntoSet.add("dev/zacsweers/metro/test/integration/CustomAnnotationsDefaultBoundType")
+}
+
 tasks.withType<Test>().configureEach {
   maxParallelForks = Runtime.getRuntime().availableProcessors() * 2
 }

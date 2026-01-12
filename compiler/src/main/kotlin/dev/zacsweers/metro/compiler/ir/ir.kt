@@ -128,6 +128,7 @@ import org.jetbrains.kotlin.ir.types.isMarkedNullable
 import org.jetbrains.kotlin.ir.types.makeNotNull
 import org.jetbrains.kotlin.ir.types.mergeNullability
 import org.jetbrains.kotlin.ir.types.removeAnnotations
+import org.jetbrains.kotlin.ir.types.typeOrNull
 import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.types.typeWithArguments
 import org.jetbrains.kotlin.ir.util.SYNTHETIC_OFFSET
@@ -144,6 +145,7 @@ import org.jetbrains.kotlin.ir.util.file
 import org.jetbrains.kotlin.ir.util.fileOrNull
 import org.jetbrains.kotlin.ir.util.fqNameWhenAvailable
 import org.jetbrains.kotlin.ir.util.functions
+import org.jetbrains.kotlin.ir.util.getOwnerIfBound
 import org.jetbrains.kotlin.ir.util.getPackageFragment
 import org.jetbrains.kotlin.ir.util.getSimpleFunction
 import org.jetbrains.kotlin.ir.util.getValueArgument
@@ -1611,10 +1613,17 @@ internal fun IrConstructorCall.bindingTypeOrNull(): Pair<IrType?, Boolean> {
     // Return a binding defined using Metro's API
     type to false
   }
+    ?: customAnnotationBindingDefaultType()?.let { it to false }
     ?:
     // Return a boundType defined using anvil KClass
     (anvilKClassBoundTypeArgument() to anvilIgnoreQualifier())
 }
+
+private fun IrConstructorCall.customAnnotationBindingDefaultType(): IrType? =
+  (symbol.getOwnerIfBound()?.parameters?.firstOrNull { it.name == Symbols.Names.binding }?.type
+      as? IrSimpleType)
+    ?.arguments[0]
+    ?.typeOrNull
 
 context(context: IrPluginContext)
 internal fun IrConstructorCall.bindingTypeArgument(): IrType? {

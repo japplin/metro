@@ -13,6 +13,7 @@ import dev.zacsweers.metro.compiler.reportCompilerBug
 import dev.zacsweers.metro.compiler.symbols.GuiceSymbols
 import dev.zacsweers.metro.compiler.symbols.Symbols
 import java.util.Objects
+import kotlin.takeUnless
 import org.jetbrains.kotlin.GeneratedDeclarationKey
 import org.jetbrains.kotlin.KtSourceElement
 import org.jetbrains.kotlin.builtins.StandardNames
@@ -45,6 +46,7 @@ import org.jetbrains.kotlin.fir.declarations.hasAnnotation
 import org.jetbrains.kotlin.fir.declarations.origin
 import org.jetbrains.kotlin.fir.declarations.primaryConstructorIfAny
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassIdSafe
+import org.jetbrains.kotlin.fir.declarations.toAnnotationClassLikeSymbol
 import org.jetbrains.kotlin.fir.declarations.utils.classId
 import org.jetbrains.kotlin.fir.declarations.utils.isAbstract
 import org.jetbrains.kotlin.fir.declarations.utils.isFinal
@@ -954,12 +956,24 @@ internal fun FirAnnotation.resolvedBindingArgument(
   typeResolver: TypeResolveService? = null,
 ): FirTypeRef? {
   // Return a binding defined using Metro's API
-  bindingArgument()?.let { binding ->
-    return binding.typeArguments[0].expectAsOrNull<FirTypeProjectionWithVariance>()?.typeRef
+  return bindingArgument()?.let { binding ->
+    binding.typeArguments[0].expectAsOrNull<FirTypeProjectionWithVariance>()?.typeRef
   }
-  // Anvil interop - try a boundType defined using anvil KClass
-  return anvilKClassBoundTypeArgument(session, typeResolver)
+    ?: customAnnotationDefaultBindingType(session)
+
+    // Anvil interop - try a boundType defined using anvil KClass
+    ?: anvilKClassBoundTypeArgument(session, typeResolver)
 }
+
+private fun FirAnnotation.customAnnotationDefaultBindingType(session: FirSession): FirTypeRef? =
+  (toAnnotationClassLikeSymbol(session) as FirRegularClassSymbol)
+    .primaryConstructorIfAny(session)
+    ?.valueParameterSymbols
+    ?.firstOrNull { it.name == Symbols.Names.binding }
+    ?.resolvedReturnType
+    ?.typeArguments[0]
+    ?.type
+    ?.toFirResolvedTypeRef()
 
 internal fun FirAnnotation.anvilKClassBoundTypeArgument(
   session: FirSession,
