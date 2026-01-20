@@ -83,18 +83,49 @@ import org.jetbrains.kotlin.name.ClassId
 /**
  * Result of validating a dependency graph. Contains all information needed to generate the graph
  * implementation in a subsequent phase.
+ *
+ * Heavy references ([bindingGraph], [graphExtensionGenerator], [childValidationResults]) are
+ * cleared after generation via [clearAfterGeneration] to reduce memory pressure during compilation
+ * of large graph hierarchies.
  */
-internal data class ValidationResult(
+internal class ValidationResult(
   val graphClassId: ClassId,
   val node: GraphNode.Local,
-  val bindingGraph: IrBindingGraph,
+  bindingGraph: IrBindingGraph,
   val sealResult: IrBindingGraph.BindingGraphResult,
-  val graphExtensionGenerator: IrGraphExtensionGenerator,
+  graphExtensionGenerator: IrGraphExtensionGenerator,
   /** Child graph validation results to generate after this graph. */
-  val childValidationResults: List<ValidationResult>,
+  childValidationResults: List<ValidationResult>,
   /** Context keys this graph uses from parent (reported back for extraKeeps). */
   val usedParentContextKeys: Set<IrContextualTypeKey>,
-)
+) {
+  // Mutable references that get cleared after generation to reduce memory pressure
+  private var _bindingGraph: IrBindingGraph? = bindingGraph
+  private var _graphExtensionGenerator: IrGraphExtensionGenerator? = graphExtensionGenerator
+  private var _childValidationResults: List<ValidationResult>? = childValidationResults
+
+  val bindingGraph: IrBindingGraph
+    get() = _bindingGraph ?: error("bindingGraph accessed after clearAfterGeneration()")
+
+  val graphExtensionGenerator: IrGraphExtensionGenerator
+    get() =
+      _graphExtensionGenerator ?: error("graphExtensionGenerator accessed after clearAfterGeneration()")
+
+  val childValidationResults: List<ValidationResult>
+    get() =
+      _childValidationResults ?: error("childValidationResults accessed after clearAfterGeneration()")
+
+  /**
+   * Clears heavy references after this graph has been generated. This allows GC to reclaim memory
+   * progressively as the graph tree is processed, rather than holding all ValidationResults until
+   * the entire tree is complete.
+   */
+  fun clearAfterGeneration() {
+    _bindingGraph = null
+    _graphExtensionGenerator = null
+    _childValidationResults = null
+  }
+}
 
 internal class DependencyGraphTransformer(
   context: IrMetroContext,
@@ -684,6 +715,10 @@ internal class DependencyGraphTransformer(
         for (childResult in validationResult.childValidationResults) {
           generateDependencyGraph(childResult, parentBindingContext = bindingPropertyContext)
         }
+
+        // Clear heavy references now that this graph and all its children are generated.
+        // This allows GC to reclaim memory progressively during large graph hierarchies.
+        validationResult.clearAfterGeneration()
       } catch (e: Exception) {
         if (e is ExitProcessingException) {
           // Implement unimplemented overrides to reduce noise in failure output
