@@ -37,6 +37,12 @@ public class DiagnosticTestGenerated extends AbstractDiagnosticTest {
     }
 
     @Test
+    @TestMetadata("ContributesBindingContainerValidation.kt")
+    public void testContributesBindingContainerValidation() {
+      runTest("compiler-tests/src/test/data/diagnostic/aggregation/ContributesBindingContainerValidation.kt");
+    }
+
+    @Test
     @TestMetadata("ContributesToOnlyPermittedOnInterfacesOrBindingContainers.kt")
     public void testContributesToOnlyPermittedOnInterfacesOrBindingContainers() {
       runTest("compiler-tests/src/test/data/diagnostic/aggregation/ContributesToOnlyPermittedOnInterfacesOrBindingContainers.kt");

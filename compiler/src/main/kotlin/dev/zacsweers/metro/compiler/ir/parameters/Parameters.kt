@@ -21,6 +21,9 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.isPropertyAccessor
+import org.jetbrains.kotlin.ir.util.isFakeOverride
+import org.jetbrains.kotlin.ir.util.isObject
+import org.jetbrains.kotlin.ir.util.parentClassOrNull
 import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.util.TypeRemapper
 import org.jetbrains.kotlin.ir.util.callableId
@@ -253,7 +256,13 @@ internal fun IrFunction.parameters(
     instance =
       dispatchReceiverParameter
         ?.takeUnless {
-          !includeObjectDispatchReceivers && (it.type.rawTypeOrNull()?.kind?.isObject == true)
+          !includeObjectDispatchReceivers &&
+            (it.type.rawTypeOrNull()?.kind?.isObject == true ||
+              // For fake overrides from interface supertypes in object classes, the dispatch
+              // receiver type references the interface rather than the declaring object class.
+              (this@parameters is IrSimpleFunction &&
+                this@parameters.isFakeOverride &&
+                this@parameters.parentClassOrNull?.isObject == true))
         }
         ?.toConstructorParameter(IrParameterKind.DispatchReceiver, remapper = remapper),
     extensionReceiver =

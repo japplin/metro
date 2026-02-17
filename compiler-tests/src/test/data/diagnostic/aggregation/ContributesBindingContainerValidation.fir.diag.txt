@@ -1,0 +1,7 @@
+/ContributesBindingContainerValidation.kt:(368,419): error: `@ContributesBindingContainer` template 'NotAnInterface' must be an interface, but is a CLASS.
+
+/ContributesBindingContainerValidation.kt:(548,597): error: `@ContributesBindingContainer` template 'NoTypeParams' must have exactly one type parameter, but has 0.
+
+/ContributesBindingContainerValidation.kt:(734,784): error: `@ContributesBindingContainer` template 'TwoTypeParams' must have exactly one type parameter, but has 2.
+
+/ContributesBindingContainerValidation.kt:(986,1003): error: Annotation class annotated with `@ContributesBindingContainer` must have a `scope: KClass<*>` parameter or specify a `defaultScope` in `@ContributesBindingContainer`.

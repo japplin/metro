@@ -5,6 +5,7 @@ package dev.zacsweers.metro.compiler.ir.transformers
 import dev.zacsweers.metro.compiler.MetroAnnotations
 import dev.zacsweers.metro.compiler.Origins
 import dev.zacsweers.metro.compiler.capitalizeUS
+import dev.zacsweers.metro.compiler.expectAsOrNull
 import dev.zacsweers.metro.compiler.exitProcessing
 import dev.zacsweers.metro.compiler.expectAs
 import dev.zacsweers.metro.compiler.fir.MetroDiagnostics
@@ -33,6 +34,7 @@ import dev.zacsweers.metro.compiler.ir.irCallableMetadata
 import dev.zacsweers.metro.compiler.ir.irExprBodySafe
 import dev.zacsweers.metro.compiler.ir.irInvoke
 import dev.zacsweers.metro.compiler.ir.isAnnotatedWithAny
+import dev.zacsweers.metro.compiler.ir.kClassReference
 import dev.zacsweers.metro.compiler.ir.isBindingContainer
 import dev.zacsweers.metro.compiler.ir.isCompanionObject
 import dev.zacsweers.metro.compiler.ir.isExternalParent
@@ -71,9 +73,11 @@ import kotlin.jvm.optionals.getOrNull
 import org.jetbrains.kotlin.backend.jvm.ir.getJvmNameFromAnnotation
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.ir.builders.irCall
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irGetObject
+import org.jetbrains.kotlin.ir.declarations.IrAnnotationContainer
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
 import org.jetbrains.kotlin.ir.declarations.IrField
@@ -83,6 +87,8 @@ import org.jetbrains.kotlin.ir.declarations.IrParameterKind
 import org.jetbrains.kotlin.ir.declarations.IrProperty
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.declarations.IrTypeAlias
+import org.jetbrains.kotlin.ir.expressions.IrClassReference
+import org.jetbrains.kotlin.ir.expressions.IrConstructorCall
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
 import org.jetbrains.kotlin.ir.symbols.IrConstructorSymbol
 import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
@@ -94,8 +100,10 @@ import org.jetbrains.kotlin.ir.util.callableId
 import org.jetbrains.kotlin.ir.util.classId
 import org.jetbrains.kotlin.ir.util.classIdOrFail
 import org.jetbrains.kotlin.ir.util.companionObject
+import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.dumpKotlinLike
+import org.jetbrains.kotlin.ir.util.getValueArgument
 import org.jetbrains.kotlin.ir.util.hasAnnotation
 import org.jetbrains.kotlin.ir.util.isFakeOverride
 import org.jetbrains.kotlin.ir.util.isFromJava
@@ -151,6 +159,13 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
         declaration.isAnnotatedWithAny(metroSymbols.classIds.contributesToAnnotations)
     val isGraph = graphAnnotation != null
 
+    // Generic interfaces (template interfaces for @ContributesBindingContainer) don't have
+    // factory classes generated for their @Provides members. Skip them but still process
+    // companion objects and other nested classes. Concrete interfaces (graphs, binding
+    // containers, contributed) are processed normally.
+    val skipDirectProvides =
+      declaration.kind == ClassKind.INTERFACE && declaration.typeParameters.isNotEmpty()
+
     declaration.declarations
       .asSequence()
       // Skip (fake) overrides, we care only about the original declaration because those have
@@ -160,6 +175,7 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
       .forEach { nestedDeclaration ->
         when (nestedDeclaration) {
           is IrProperty -> {
+            if (skipDirectProvides) return@forEach
             val getter = nestedDeclaration.getter ?: return@forEach
             val metroFunction = metroFunctionOf(getter)
             if (metroFunction.annotations.isProvides) {
@@ -168,6 +184,14 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
             }
           }
           is IrSimpleFunction -> {
+            if (skipDirectProvides) return@forEach
+            // Generate body for binding container _impl functions (calls template via super)
+            if (
+              nestedDeclaration.origin == Origins.BindingContainerImplFunction &&
+                nestedDeclaration.body == null
+            ) {
+              generateImplFunctionBody(nestedDeclaration)
+            }
             val metroFunction = metroFunctionOf(nestedDeclaration)
             if (metroFunction.annotations.isProvides) {
               providerFactories[nestedDeclaration.callableId] =
@@ -188,6 +212,7 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
 
     val bindingContainerAnnotation =
       declaration.annotationsIn(metroSymbols.classIds.bindingContainerAnnotations).singleOrNull()
+
     val includes =
       bindingContainerAnnotation?.includedClasses()?.mapNotNullToSet {
         it.classType.rawTypeOrNull()?.classIdOrFail
@@ -243,6 +268,96 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
     return getOrLookupProviderFactory(
       getOrPutCallableReference(declaration, declaration.parentAsClass, metroFunction.annotations)
     )
+  }
+
+  /**
+   * Generates a body for a binding container `_impl` function that delegates to the template
+   * interface's default implementation. The generated body is:
+   * `return super<TemplateInterface>.originalName(args)`
+   */
+  private fun generateImplFunctionBody(function: IrSimpleFunction) {
+    val bindingContainerClass = function.parentAsClass
+
+    // Strip _impl suffix to find the inherited function (fake override from the template interface)
+    val originalName = function.name.identifier.removeSuffix(Symbols.StringNames.IMPL_SUFFIX)
+    val inheritedFunction =
+      bindingContainerClass.declarations
+        .filterIsInstance<IrSimpleFunction>()
+        .firstOrNull { it.isFakeOverride && it.name.identifier == originalName }
+        ?: return
+
+    function.body =
+      pluginContext.createIrBuilder(function.symbol).run {
+        irExprBodySafe(
+          irCall(inheritedFunction.symbol, type = function.returnType).apply {
+            arguments[0] = irGet(function.dispatchReceiverParameter!!)
+            val implParams = function.regularParameters
+            val inheritedParams = inheritedFunction.regularParameters
+            if (implParams.size == inheritedParams.size) {
+              // Normal path: pass all params through
+              for ((i, param) in implParams.withIndex()) {
+                arguments[i + 1] = irGet(param)
+              }
+            } else {
+              // Some params were removed in FIR (KClass<T>, T-typed for objects, or
+              // annotation-arg params). Provide compiler-generated values for unmatched
+              // inherited params.
+              val targetClass = bindingContainerClass.parent as IrClass
+              val implParamsByName = implParams.associateBy { it.name }
+              // Find the custom annotation on the target class for this binding container
+              val customAnnotation =
+                findCustomAnnotationForContainer(bindingContainerClass, targetClass)
+              for ((i, inheritedParam) in inheritedParams.withIndex()) {
+                val implParam = implParamsByName[inheritedParam.name]
+                arguments[i + 1] = when {
+                  implParam != null -> irGet(implParam)
+                  inheritedParam.type.classOrNull == context.irBuiltIns.kClassClass ->
+                    kClassReference(targetClass.symbol)
+                  else -> {
+                    // Try annotation argument, fall back to object singleton
+                    customAnnotation
+                      ?.getValueArgument(inheritedParam.name)
+                      ?.deepCopyWithSymbols()
+                      ?: irGetObject(targetClass.symbol)
+                  }
+                }
+              }
+            }
+          }
+        )
+      }
+  }
+
+  /**
+   * Finds the custom annotation on the [targetClass] whose `@ContributesBindingContainer`
+   * meta-annotation template matches the [bindingContainerClass]'s template interface supertype.
+   */
+  private fun findCustomAnnotationForContainer(
+    bindingContainerClass: IrClass,
+    targetClass: IrAnnotationContainer,
+  ): IrConstructorCall? {
+    // Get the template interface ClassId from the binding container's supertypes
+    val templateClassId = bindingContainerClass.superTypes
+      .mapNotNull { it.classOrNull?.owner }
+      .firstOrNull { it.kind == ClassKind.INTERFACE && it.typeParameters.isNotEmpty() }
+      ?.classId ?: return null
+
+    // Find the custom annotation on the target whose @ContributesBindingContainer points to
+    // this template
+    for (annotation in targetClass.annotations) {
+      val annotationClass = annotation.symbol.owner.parentAsClass
+      val metaAnno = annotationClass.annotations.firstOrNull { metaAnno ->
+        metaAnno.symbol.owner.parentAsClass.classId ==
+          metroSymbols.classIds.contributesBindingContainerAnnotation
+      } ?: continue
+      val templateArg = metaAnno.getValueArgument(Symbols.Names.template)
+        ?.expectAsOrNull<IrClassReference>()
+        ?.classType
+        ?.rawTypeOrNull()
+        ?.classId
+      if (templateArg == templateClassId) return annotation
+    }
+    return null
   }
 
   fun getOrLookupProviderFactory(binding: IrBinding.Provided): ProviderFactory? {
@@ -602,8 +717,9 @@ internal class BindingContainerTransformer(context: IrMetroContext) : IrMetroCon
       }
 
     private val simpleName by lazy {
+      val baseName = name.identifier.removeSuffix(Symbols.StringNames.IMPL_SUFFIX)
       buildString {
-        append(name.capitalizeUS())
+        append(baseName.capitalizeUS())
         append(Symbols.Names.MetroFactory.asString())
       }
     }

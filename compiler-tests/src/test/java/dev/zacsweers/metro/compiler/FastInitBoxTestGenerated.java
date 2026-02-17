@@ -31,6 +31,12 @@ public class FastInitBoxTestGenerated extends AbstractFastInitBoxTest {
     }
 
     @Test
+    @TestMetadata("AnvilContributesBindingCrossModule.kt")
+    public void testAnvilContributesBindingCrossModule() {
+      runTest("compiler-tests/src/test/data/box/aggregation/AnvilContributesBindingCrossModule.kt");
+    }
+
+    @Test
     @TestMetadata("AnyIsAValidSupertype.kt")
     public void testAnyIsAValidSupertype() {
       runTest("compiler-tests/src/test/data/box/aggregation/AnyIsAValidSupertype.kt");
@@ -88,6 +94,96 @@ public class FastInitBoxTestGenerated extends AbstractFastInitBoxTest {
     @TestMetadata("ContributedGraphBindingContainerExcludedFromParent.kt")
     public void testContributedGraphBindingContainerExcludedFromParent() {
       runTest("compiler-tests/src/test/data/box/aggregation/ContributedGraphBindingContainerExcludedFromParent.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerAnnotationArgs.kt")
+    public void testContributesBindingContainerAnnotationArgs() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerAnnotationArgs.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerAnnotationArgsWithT.kt")
+    public void testContributesBindingContainerAnnotationArgsWithT() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerAnnotationArgsWithT.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerBasic.kt")
+    public void testContributesBindingContainerBasic() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerBasic.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerCrossModule.kt")
+    public void testContributesBindingContainerCrossModule() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerCrossModule.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerDefaultScope.kt")
+    public void testContributesBindingContainerDefaultScope() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerDefaultScope.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerDefaultScopeOverride.kt")
+    public void testContributesBindingContainerDefaultScopeOverride() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerDefaultScopeOverride.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerKClass.kt")
+    public void testContributesBindingContainerKClass() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerKClass.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerObject.kt")
+    public void testContributesBindingContainerObject() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerObject.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerObjectIntoSet.kt")
+    public void testContributesBindingContainerObjectIntoSet() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerObjectIntoSet.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerObjectIntoSetAnnotationArgs.kt")
+    public void testContributesBindingContainerObjectIntoSetAnnotationArgs() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerObjectIntoSetAnnotationArgs.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerReplaces.kt")
+    public void testContributesBindingContainerReplaces() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerReplaces.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerTemplateScope.kt")
+    public void testContributesBindingContainerTemplateScope() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerTemplateScope.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerWithAnvilContributesBinding.kt")
+    public void testContributesBindingContainerWithAnvilContributesBinding() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerWithAnvilContributesBinding.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerWithAnvilContributesBindingThreeModules.kt")
+    public void testContributesBindingContainerWithAnvilContributesBindingThreeModules() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerWithAnvilContributesBindingThreeModules.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesBindingContainerWithContributesBinding.kt")
+    public void testContributesBindingContainerWithContributesBinding() {
+      runTest("compiler-tests/src/test/data/box/aggregation/ContributesBindingContainerWithContributesBinding.kt");
     }
 
     @Test

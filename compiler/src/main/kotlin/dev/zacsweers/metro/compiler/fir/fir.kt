@@ -114,6 +114,7 @@ import org.jetbrains.kotlin.fir.types.ConeClassLikeLookupTag
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
+import org.jetbrains.kotlin.fir.types.ConeTypeParameterType
 import org.jetbrains.kotlin.fir.types.ConeTypeProjection
 import org.jetbrains.kotlin.fir.types.FirTypeProjectionWithVariance
 import org.jetbrains.kotlin.fir.types.FirTypeRef
@@ -227,6 +228,20 @@ internal fun List<FirAnnotation>.isAnnotatedWithAny(
   names: Set<ClassId>,
 ): Boolean {
   return annotationsIn(session, names).any()
+}
+
+/**
+ * Returns `true` if this callable (function or property) has a `@Provides` annotation.
+ * For properties, also checks the getter for `@Provides`.
+ */
+internal fun FirCallableSymbol<*>.isProvidesAnnotated(
+  session: FirSession,
+  providesAnnotations: Set<ClassId>,
+): Boolean {
+  return isAnnotatedWithAny(session, providesAnnotations) ||
+    (this as? FirPropertySymbol)
+      ?.getterSymbol
+      ?.isAnnotatedWithAny(session, providesAnnotations) == true
 }
 
 internal inline fun FirMemberDeclaration.checkVisibility(
@@ -1072,7 +1087,14 @@ internal fun FirGetClassCall.resolveClassId(typeResolver: MetroFirTypeResolver):
   return typeResolver.resolveType(reference).classId
 }
 
-internal fun FirGetClassCall.resolvedClassId() = (argument as? FirResolvedQualifier)?.classId
+internal fun FirGetClassCall.resolvedClassId(): ClassId? {
+  return when (val arg = argument) {
+    is FirResolvedQualifier -> arg.classId
+    // Deserialized annotations from binary dependencies use FirClassReferenceExpression
+    is FirClassReferenceExpression -> arg.classTypeRef.coneTypeOrNull?.classId
+    else -> null
+  }
+}
 
 internal fun FirGetClassCall.resolvedArgumentConeKotlinType(
   typeResolver: TypeResolveService
@@ -1532,4 +1554,25 @@ internal fun ConeKotlinType.toClassSymbolCompat(s: FirSession): FirClassSymbol<*
 
 internal fun ConeClassLikeLookupTag.toSymbolCompat(s: FirSession): FirClassLikeSymbol<*>? {
   return toSymbol(s)
+}
+
+internal fun isKClassOfTypeParameter(type: ConeKotlinType): Boolean {
+  if (type !is ConeClassLikeType) return false
+  if (type.lookupTag.classId != StandardClassIds.KClass) return false
+  return type.typeArguments.firstOrNull() is ConeTypeParameterType
+}
+
+/**
+ * Returns the set of parameter names from the annotation class's primary constructor that are
+ * custom annotation arguments (i.e., not the well-known `scope` or `replaces` params that Metro
+ * handles specially).
+ */
+internal fun getAnnotationArgParamNames(
+  annotationClassSymbol: FirRegularClassSymbol,
+  session: FirSession,
+): Set<Name> {
+  val ctor = annotationClassSymbol.primaryConstructorIfAny(session) ?: return emptySet()
+  return buildSet {
+    addAll(ctor.valueParameterSymbols.filterNot { it.name == Symbols.Names.scope || it.name == Symbols.Names.replaces }.map { it.name })
+  }
 }

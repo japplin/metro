@@ -296,6 +296,183 @@ interface TestAppGraph {
 }
 ```
 
+## @ContributesBindingContainer
+
+While `@ContributesTo` + `@BindingContainer` works well for one-off binding containers, you may find yourself writing the same pattern repeatedly for different classes. `@ContributesBindingContainer` is a meta-annotation that lets you define a reusable template interface and stamp out implementations for each annotated class.
+
+### Defining a template
+
+A template is an interface with exactly one type parameter. Its `@Provides` functions define what bindings will be generated for each target class.
+
+```kotlin
+interface AnalyticsTemplate<T : Any> {
+  @Provides fun provideAnalyticsName(target: T): String = target::class.simpleName!!
+}
+```
+
+The type parameter `T` is replaced with the target class at each usage site. Template functions can reference `T` in their parameters to receive the target instance.
+
+### `KClass<T>` parameters
+
+Template functions can also accept `KClass<T>` parameters to receive the target class reference. This is useful for reflection-based patterns like deriving names, registry keys, or logging identifiers from the class itself.
+
+```kotlin
+interface AnalyticsTemplate<T : Any> {
+  @Provides fun provideAnalyticsName(targetClass: KClass<T>): String = targetClass.simpleName!!
+}
+```
+
+`KClass<T>` parameters are always compiler-provided (not DI-injected) and resolved to `TargetClass::class` in the generated code. They can be combined with `T` parameters in the same function:
+
+```kotlin
+interface DetailedTemplate<T : Any> {
+  @Provides fun provideDetails(target: T, targetClass: KClass<T>): String =
+    "${targetClass.simpleName}: $target"
+}
+```
+
+This works for both `@Inject` classes and `object` targets.
+
+### Creating a custom annotation
+
+Link your template to a custom annotation with `@ContributesBindingContainer`:
+
+```kotlin
+@ContributesBindingContainer(AnalyticsTemplate::class)
+annotation class ContributesAnalytics(val scope: KClass<*>)
+```
+
+The custom annotation must have a `scope: KClass<*>` parameter (or use `defaultScope`, described below).
+
+### Usage
+
+Apply the custom annotation to target classes:
+
+```kotlin
+@ContributesAnalytics(AppScope::class)
+@Inject
+class UserScreen
+
+@DependencyGraph(AppScope::class)
+interface AppGraph {
+  val analyticsName: String
+}
+```
+
+Metro generates a binding container object for `UserScreen` that implements `AnalyticsTemplate<UserScreen>` and contributes it to `AppScope`.
+
+### Object targets
+
+`object` classes are also supported. Since objects are singletons, no `@Inject` annotation is needed — Metro automatically resolves `T` parameters to the object instance.
+
+```kotlin
+@ContributesAnalytics(AppScope::class)
+object FeatureFlag
+```
+
+### TemplateScope
+
+When a template needs scoped bindings, use `TemplateScope` as a placeholder. Metro substitutes it with the actual scope at each usage site.
+
+```kotlin
+interface ScopedTemplate<T> {
+  @Provides @SingleIn(TemplateScope::class) fun provideExpensiveValue(): Int = computeValue()
+}
+
+@ContributesBindingContainer(ScopedTemplate::class)
+annotation class ScopedContainer(val scope: KClass<*>)
+
+@ScopedContainer(AppScope::class)
+@Inject
+class SomeTarget
+```
+
+Here, `@SingleIn(TemplateScope::class)` becomes `@SingleIn(AppScope::class)` in the generated code.
+
+### Default scope
+
+If all targets should contribute to the same scope, use `defaultScope` to avoid requiring a `scope` parameter on every usage:
+
+```kotlin
+@ContributesBindingContainer(AnalyticsTemplate::class, defaultScope = AppScope::class)
+annotation class ContributesAnalytics
+```
+
+Now targets don't need to specify a scope:
+
+```kotlin
+@ContributesAnalytics
+@Inject
+class UserScreen
+```
+
+If the custom annotation still has a `scope` parameter, the user-provided value takes precedence over `defaultScope`.
+
+### Multibindings
+
+Templates can use `@IntoSet` and `@IntoMap` to contribute into multibindings:
+
+```kotlin
+interface IntoSetTemplate<T : Any> {
+  @Provides @IntoSet fun intoSet(target: T): Any = target
+}
+
+@ContributesBindingContainer(IntoSetTemplate::class)
+annotation class AddToSet(val scope: KClass<*>)
+
+@AddToSet(AppScope::class)
+object FeatureA
+
+@AddToSet(AppScope::class)
+object FeatureB
+
+@DependencyGraph(AppScope::class)
+interface AppGraph {
+  val features: Set<Any>
+}
+```
+
+### Custom annotation arguments
+
+Template functions can access arguments from the custom annotation by declaring parameters with the same name and type. These parameters are compiler-provided -- not injected by the DI container.
+
+```kotlin
+interface TaggedTemplate<T : Any> {
+  @Provides fun provideTag(tag: String): String = tag
+}
+
+@ContributesBindingContainer(TaggedTemplate::class)
+annotation class ContributesTagged(val scope: KClass<*>, val tag: String)
+
+@ContributesTagged(AppScope::class, tag = "feature-x")
+@Inject
+class FeatureX
+```
+
+The generated binding container passes `"feature-x"` as the `tag` argument. This works with all annotation-compatible types: primitives, strings, enums, `KClass<*>`, and arrays of these.
+
+Custom annotation arguments can be combined with `T` and `KClass<T>` parameters in the same function.
+
+### Replacing generated containers
+
+Generated binding containers can be replaced using the standard `replaces` mechanism. The `replaces` target is the annotated class itself:
+
+```kotlin
+@ContributesBindingContainer(IntTemplate::class)
+annotation class IntContainer(val scope: KClass<*>)
+
+@IntContainer(AppScope::class)
+@Inject
+class OriginalTarget
+
+// Replace the generated container for OriginalTarget
+@ContributesTo(AppScope::class, replaces = [OriginalTarget::class])
+@BindingContainer
+object ReplacementBinding {
+  @Provides fun provideInt(): Int = 2
+}
+```
+
 ## Implementation notes
 
 This leans on Kotlin’s ability to put generic type parameters on annotations. That in turn allows for both generic bound types and to contribute map bindings to multiple map keys.
