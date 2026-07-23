@@ -129,6 +129,7 @@ import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
 import org.jetbrains.kotlin.fir.types.ConeTypeProjection
 import org.jetbrains.kotlin.fir.types.FirPlaceholderProjection
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.fir.types.FirStarProjection
 import org.jetbrains.kotlin.fir.types.FirTypeProjectionWithVariance
 import org.jetbrains.kotlin.fir.types.FirTypeRef
@@ -804,7 +805,7 @@ internal fun List<FirAnnotation>.mapKeyAnnotation(session: FirSession): MetroFir
 /**
  * Resolves a map key for a contribution with this [FirClassSymbol] as its annotated class.
  *
- * Existing implementation-site map keys take precedence over a class-declared map key.
+ * Implementation-site map keys take precedence over a class-declared map key.
  */
 internal fun FirClassSymbol<*>.resolveContributionMapKey(
   annotation: FirAnnotation,
@@ -814,10 +815,42 @@ internal fun FirClassSymbol<*>.resolveContributionMapKey(
     bindingType.annotations.mapKeyAnnotation(session)?.let { mapKey ->
       return mapKey.withImplicitClassKeyValue(session, classId)
     }
+    bindingType.mapKeyInTypeArguments(session)?.let { return it }
   }
+
+  val supertypes =
+    resolvedSuperTypeRefs.filter {
+      it.coneType.toRegularClassSymbol(session)?.classId != StandardClassIds.Any
+    }
+
+  supertypes.firstNotNullOfOrNull { it.mapKeyInTypeArguments(session) }?.let { return it }
 
   resolvedCompilerAnnotationsWithClassIds.mapKeyAnnotation(session)?.let { mapKey ->
     return mapKey.withImplicitClassKeyValue(session, classId)
+  }
+
+  return null
+}
+
+/** Finds a map key on a nested generic type argument. */
+private fun FirTypeRef.mapKeyInTypeArguments(session: FirSession): MetroFirAnnotation? {
+  val sourceTypeRef = (this as? FirResolvedTypeRef)?.delegatedTypeRef ?: this
+  val userTypeRef = sourceTypeRef as? FirUserTypeRef ?: return null
+  val arguments = userTypeRef.qualifier.lastOrNull()?.typeArgumentList?.typeArguments ?: return null
+  val resolvedArguments = (coneTypeOrNull as? ConeClassLikeType)?.typeArguments.orEmpty()
+
+  for ((index, argument) in arguments.withIndex()) {
+    val typeRef = (argument as? FirTypeProjectionWithVariance)?.typeRef ?: continue
+    val classId =
+      typeRef.coneTypeOrNull?.toRegularClassSymbol(session)?.classId
+        ?: (resolvedArguments.getOrNull(index) as? ConeKotlinTypeProjection)
+          ?.type
+          ?.toRegularClassSymbol(session)
+          ?.classId
+    typeRef.annotations.mapKeyAnnotation(session)?.let { mapKey ->
+      return mapKey.withImplicitClassKeyValue(session, classId)
+    }
+    typeRef.mapKeyInTypeArguments(session)?.let { return it }
   }
 
   return null

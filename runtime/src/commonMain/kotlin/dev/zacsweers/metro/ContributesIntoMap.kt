@@ -7,8 +7,8 @@ import kotlin.reflect.KClass
 
 /**
  * Contributes an [IntoMap] binding of the annotated type to the given [scope] as a [binding] (if
- * specified) or single declared supertype. A [MapKey] _must_ be declared either on the annotated
- * class or on the [binding].
+ * specified) or single declared supertype. A [MapKey] _must_ be declared on the annotated class,
+ * [binding], or a generic type argument of the bound type.
  *
  * ```
  * // Implicit supertype is Base
@@ -35,6 +35,16 @@ import kotlin.reflect.KClass
  * @ContributesIntoMap(AppScope::class, binding = binding<@ClassKey(Impl::class) Base>())
  * @Inject
  * class Impl : Base, AnotherBase
+ * ```
+ *
+ * A map key can also be declared on a generic type argument of the bound type.
+ *
+ * ```
+ * interface Screen<T>
+ *
+ * @ContributesIntoMap(AppScope::class)
+ * @Inject
+ * class HomeScreen : Screen<@ClassKey HomeKey>
  * ```
  *
  * This annotation is _repeatable_, allowing for contributions as multiple bound types. Note that

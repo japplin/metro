@@ -123,6 +123,12 @@ public class FastInitBoxTestGenerated extends AbstractFastInitBoxTest {
     }
 
     @Test
+    @TestMetadata("ContributesIntoMap_ClassKeyOnTypeArgument.kt")
+    public void testContributesIntoMap_ClassKeyOnTypeArgument() {
+      run("ContributesIntoMap_ClassKeyOnTypeArgument.kt");
+    }
+
+    @Test
     @TestMetadata("ContributingMultibileNullableBindings.kt")
     public void testContributingMultibileNullableBindings() {
       run("ContributingMultibileNullableBindings.kt");

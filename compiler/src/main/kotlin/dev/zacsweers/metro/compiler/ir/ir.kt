@@ -2223,7 +2223,7 @@ internal fun IrAnnotationContainer.mapKeyAnnotation() =
     ?.let(::IrAnnotation)
 
 /**
- * Resolves the existing map key for a contributed class.
+ * Resolves the map key for a contributed class.
  */
 context(context: IrMetroContext)
 internal fun IrClass.resolveContributionMapKey(
@@ -2232,9 +2232,23 @@ internal fun IrClass.resolveContributionMapKey(
   explicitBindingType?.originalType?.mapKeyAnnotation()?.let { mapKey ->
     return mapKey.withImplicitClassKeyValue(defaultType)
   }
+  explicitBindingType?.originalType?.mapKeyInTypeArguments()?.let { return it }
+
+  superTypes.firstNotNullOfOrNull { it.mapKeyInTypeArguments() }?.let { return it }
 
   mapKeyAnnotation()?.let { mapKey -> return mapKey.withImplicitClassKeyValue(defaultType) }
 
+  return null
+}
+
+context(context: IrMetroContext)
+private fun IrType.mapKeyInTypeArguments(): IrAnnotation? {
+  val simpleType = this as? IrSimpleType ?: return null
+  for (argument in simpleType.arguments) {
+    val type = argument.typeOrNull ?: continue
+    type.mapKeyAnnotation()?.let { mapKey -> return mapKey.withImplicitClassKeyValue(type) }
+    type.mapKeyInTypeArguments()?.let { return it }
+  }
   return null
 }
 

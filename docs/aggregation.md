@@ -162,7 +162,8 @@ class CacheImpl(...) : Cache
 
 Same rules around qualifiers and `binding()` apply in this scenario
 
-To contribute into a Map multibinding, the map key annotation must be specified on the class or `binding` type argument.
+To contribute into a Map multibinding, the map key annotation must be specified on the class,
+`binding` type argument, or a generic type argument of the bound type.
 
 ```kotlin
 // Will be contributed into a Map multibinding with @StringKey("Networking")
@@ -178,6 +179,16 @@ class CacheImpl(...) : Cache
 )
 @Inject
 class CacheImpl(...) : Cache
+```
+
+For implicit class keys, you can put `@ClassKey` directly on the bound type's generic argument.
+
+```kotlin
+interface RouteScreen<T>
+
+@ContributesIntoMap(AppScope::class)
+@Inject
+class HomeScreen : RouteScreen<@ClassKey HomeKey>
 ```
 
 This annotation is also repeatable and can be used to contribute to multiple scopes, multiple bound types, and multiple map keys.

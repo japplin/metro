@@ -74,6 +74,11 @@ public class BoxTestGenerated extends AbstractBoxTest {
       run("ComputedPropertiesIntoSet.kt");
     }
 
+    @TestMetadata("ContributesIntoMap_DefaultBindingClassKeyMultiModule.kt")
+    public void testContributesIntoMap_DefaultBindingClassKeyMultiModule() {
+      run("ContributesIntoMap_DefaultBindingClassKeyMultiModule.kt");
+    }
+
     @Test
     @TestMetadata("ContributedBindingContainerExclusions.kt")
     public void testContributedBindingContainerExclusions() {
@@ -120,6 +125,12 @@ public class BoxTestGenerated extends AbstractBoxTest {
     @TestMetadata("ContributesBindingScopeArgumentOrder.kt")
     public void testContributesBindingScopeArgumentOrder() {
       run("ContributesBindingScopeArgumentOrder.kt");
+    }
+
+    @Test
+    @TestMetadata("ContributesIntoMap_ClassKeyOnTypeArgument.kt")
+    public void testContributesIntoMap_ClassKeyOnTypeArgument() {
+      run("ContributesIntoMap_ClassKeyOnTypeArgument.kt");
     }
 
     @Test
