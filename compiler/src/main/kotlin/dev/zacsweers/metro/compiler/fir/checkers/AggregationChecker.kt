@@ -22,6 +22,7 @@ import dev.zacsweers.metro.compiler.fir.mapKeyAnnotation
 import dev.zacsweers.metro.compiler.fir.metroFirBuiltIns
 import dev.zacsweers.metro.compiler.fir.qualifierAnnotation
 import dev.zacsweers.metro.compiler.fir.resolveDefaultBindingType
+import dev.zacsweers.metro.compiler.fir.resolveContributionMapKey
 import dev.zacsweers.metro.compiler.fir.resolvedBindingArgument
 import dev.zacsweers.metro.compiler.fir.resolvedScopeClassId
 import dev.zacsweers.metro.compiler.fir.scopeArgument
@@ -398,30 +399,23 @@ internal object AggregationChecker : FirClassChecker(MppCheckerKind.Common) {
 
     val mapKey =
       if (isMapBinding) {
-        val classMapKey = declaration.annotations.mapKeyAnnotation(session)
-        val resolvedKey =
+        val resolvedKey = declaration.symbol.resolveContributionMapKey(annotation, session)
+        if (resolvedKey == null) {
           if (explicitBindingType == null) {
-            classMapKey.also {
-              if (it == null) {
-                reporter.reportOn(
-                  annotation.source,
-                  MetroDiagnostics.AGGREGATION_ERROR,
-                  "`@$kind`-annotated class ${declaration.classId.asSingleFqName()} must declare a map key on the class or an explicit bound type but doesn't.",
-                )
-              }
-            }
+            reporter.reportOn(
+              annotation.source,
+              MetroDiagnostics.AGGREGATION_ERROR,
+              "`@$kind`-annotated class ${declaration.classId.asSingleFqName()} must declare a map key on the class or an explicit bound type but doesn't.",
+            )
           } else {
-            (explicitBindingType.annotations.mapKeyAnnotation(session) ?: classMapKey).also {
-              if (it == null) {
-                reporter.reportOn(
-                  explicitBindingType.source,
-                  MetroDiagnostics.AGGREGATION_ERROR,
-                  "`@$kind`-annotated class @${declaration.symbol.classId.asSingleFqName()} must declare a map key but doesn't. Add one on the explicit bound type or the class.",
-                )
-              }
-            }
+            reporter.reportOn(
+              explicitBindingType.source,
+              MetroDiagnostics.AGGREGATION_ERROR,
+              "`@$kind`-annotated class @${declaration.symbol.classId.asSingleFqName()} must declare a map key but doesn't. Add one on the explicit bound type or the class.",
+            )
           }
-        resolvedKey ?: return false
+          return false
+        }
 
         // Check implicit class key usage
         checkImplicitClassKeyUsage(

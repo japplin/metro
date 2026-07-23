@@ -30,7 +30,6 @@ import dev.zacsweers.metro.compiler.ir.irInvoke
 import dev.zacsweers.metro.compiler.ir.isAnnotatedWithAny
 import dev.zacsweers.metro.compiler.ir.isBindingContainer
 import dev.zacsweers.metro.compiler.ir.isExternalParent
-import dev.zacsweers.metro.compiler.ir.isImplicitClassKeySentinel
 import dev.zacsweers.metro.compiler.ir.isKiaIntoMultibinding
 import dev.zacsweers.metro.compiler.ir.kClassReference
 import dev.zacsweers.metro.compiler.ir.lookupClass
@@ -39,9 +38,9 @@ import dev.zacsweers.metro.compiler.ir.originClassId
 import dev.zacsweers.metro.compiler.ir.parameters.Parameters
 import dev.zacsweers.metro.compiler.ir.parameters.dedupeParameters
 import dev.zacsweers.metro.compiler.ir.parameters.parameters
-import dev.zacsweers.metro.compiler.ir.populateImplicitClassKey
 import dev.zacsweers.metro.compiler.ir.rawType
 import dev.zacsweers.metro.compiler.ir.rawTypeOrNull
+import dev.zacsweers.metro.compiler.ir.resolveContributionMapKey
 import dev.zacsweers.metro.compiler.ir.regularParameters
 import dev.zacsweers.metro.compiler.ir.replaceAnnotationsCompat
 import dev.zacsweers.metro.compiler.ir.requireNestedClass
@@ -58,7 +57,6 @@ import dev.zacsweers.metro.compiler.reserveName
 import dev.zacsweers.metro.compiler.symbols.Symbols
 import dev.zacsweers.metro.compiler.tracing.TraceScope
 import dev.zacsweers.metro.compiler.tracing.trace
-import java.util.Objects
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.descriptors.Modality
@@ -553,15 +551,10 @@ internal class ContributionIrTransformer(
               addAnnotationCompat(buildIntoSetAnnotation())
             is Contribution.ContributesIntoMapBinding -> {
               addAnnotationCompat(buildIntoMapAnnotation())
-              val mapKey =
-                explicitBindingType?.originalType?.mapKeyAnnotation()
-                  ?: originClass.mapKeyAnnotation()
-              mapKey?.let { mk ->
-                val copied = mk.ir.deepCopyWithSymbols()
-                if (isImplicitClassKeySentinel(copied)) {
-                  populateImplicitClassKey(copied, originClass.defaultType)
-                }
-                addAnnotationCompat(copied)
+              // Copy the resolved map key annotation.
+              val mapKey = originClass.resolveContributionMapKey(explicitBindingType)
+              mapKey?.let { resolvedMapKey ->
+                addAnnotationCompat(resolvedMapKey.ir.deepCopyWithSymbols())
               }
             }
             is Contribution.ContributesBinding -> {}
@@ -865,23 +858,10 @@ internal class ContributionIrTransformer(
           val qualifier = explicitBindingType?.qualifier ?: bindingTypeKey.qualifier
 
           // Original type has the original annotations, if any
-          val mapKey =
-            explicitBindingType?.originalType?.mapKeyAnnotation()
-              ?: annotatedType.mapKeyAnnotation()
+          val mapKey = annotatedType.resolveContributionMapKey(explicitBindingType)
 
-          // For map key hashing, use the effective key value. For implicit class keys
-          // (sentinel Nothing::class), incorporate the annotated type's class ID instead
-          // so that different classes get unique function names.
-          val mapKeyHash =
-            if (
-              mapKey != null &&
-                this@BindingContribution is ContributesIntoMapBinding &&
-                isImplicitClassKeySentinel(mapKey.ir)
-            ) {
-              Objects.hash(mapKey.hashCode(), annotatedType.classId).toUInt()
-            } else {
-              mapKey?.hashCode()?.toUInt()
-            }
+          // The resolved annotation includes the effective value for implicit class keys.
+          val mapKeyHash = mapKey?.hashCode()?.toUInt()
 
           val suffix = buildString {
             append("As")
@@ -916,12 +896,9 @@ internal class ContributionIrTransformer(
               qualifier?.let { addAnnotationCompat(it.ir.deepCopyWithSymbols()) }
               // TODO can we remove this and just rely on the copy in BindsMirrorTransformer?
               if (this@BindingContribution is ContributesIntoMapBinding) {
-                mapKey?.let { mk ->
-                  val copied = mk.ir.deepCopyWithSymbols()
-                  if (isImplicitClassKeySentinel(copied)) {
-                    populateImplicitClassKey(copied, annotatedType.defaultType)
-                  }
-                  addAnnotationCompat(copied)
+                // Copy the resolved map key annotation.
+                mapKey?.let { resolvedMapKey ->
+                  addAnnotationCompat(resolvedMapKey.ir.deepCopyWithSymbols())
                 }
               }
               metadataDeclarationRegistrarCompat.registerFunctionAsMetadataVisible(this)

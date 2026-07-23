@@ -47,6 +47,7 @@ import org.jetbrains.kotlin.fir.declarations.getAnnotationByClassId
 import org.jetbrains.kotlin.fir.declarations.getTargetType
 import org.jetbrains.kotlin.fir.declarations.origin
 import org.jetbrains.kotlin.fir.declarations.primaryConstructorIfAny
+import org.jetbrains.kotlin.fir.declarations.toAnnotationClass
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassId
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassIdSafe
 import org.jetbrains.kotlin.fir.declarations.toAnnotationClassLikeSymbol
@@ -799,6 +800,48 @@ internal fun FirAnnotationContainer.mapKeyAnnotation(session: FirSession): Metro
 
 internal fun List<FirAnnotation>.mapKeyAnnotation(session: FirSession): MetroFirAnnotation? =
   asSequence().annotationAnnotatedWithAny(session, session.classIds.mapKeyAnnotations)
+
+/**
+ * Resolves a map key for a contribution with this [FirClassSymbol] as its annotated class.
+ *
+ * Existing implementation-site map keys take precedence over a class-declared map key.
+ */
+internal fun FirClassSymbol<*>.resolveContributionMapKey(
+  annotation: FirAnnotation,
+  session: FirSession,
+): MetroFirAnnotation? {
+  annotation.resolvedBindingArgument(session, typeResolver = null)?.let { bindingType ->
+    bindingType.annotations.mapKeyAnnotation(session)?.let { mapKey ->
+      return mapKey.withImplicitClassKeyValue(session, classId)
+    }
+  }
+
+  resolvedCompilerAnnotationsWithClassIds.mapKeyAnnotation(session)?.let { mapKey ->
+    return mapKey.withImplicitClassKeyValue(session, classId)
+  }
+
+  return null
+}
+
+/** Materializes an omitted implicit class key using [implicitClassKeyClassId]. */
+private fun MetroFirAnnotation.withImplicitClassKeyValue(
+  session: FirSession,
+  implicitClassKeyClassId: ClassId?,
+): MetroFirAnnotation {
+  if (!hasImplicitClassKey(session)) return this
+  if (mapKeyClassValueExpression() != null) return this
+  val classId = implicitClassKeyClassId ?: return this
+  val mapKeyClass = fir.toAnnotationClass(session) ?: return this
+  val normalizedAnnotation =
+    buildSimpleAnnotation { mapKeyClass.symbol }.apply {
+      replaceArgumentMapping(
+        buildAnnotationArgumentMapping {
+          mapping[StandardNames.DEFAULT_VALUE_PARAMETER] = buildClassReference(session, classId)
+        }
+      )
+    }
+  return MetroFirAnnotation(normalizedAnnotation, session)
+}
 
 /**
  * Checks if the given [mapKeyAnnotation]'s `@MapKey` meta-annotation has `implicitClassKey = true`.

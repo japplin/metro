@@ -2222,6 +2222,32 @@ internal fun IrAnnotationContainer.mapKeyAnnotation() =
     .singleOrNull()
     ?.let(::IrAnnotation)
 
+/**
+ * Resolves the existing map key for a contributed class.
+ */
+context(context: IrMetroContext)
+internal fun IrClass.resolveContributionMapKey(
+  explicitBindingType: IrTypeKey?,
+): IrAnnotation? {
+  explicitBindingType?.originalType?.mapKeyAnnotation()?.let { mapKey ->
+    return mapKey.withImplicitClassKeyValue(defaultType)
+  }
+
+  mapKeyAnnotation()?.let { mapKey -> return mapKey.withImplicitClassKeyValue(defaultType) }
+
+  return null
+}
+
+/** Materializes an omitted implicit class key using [implicitClassKeyType]. */
+context(context: IrMetroContext)
+private fun IrAnnotation.withImplicitClassKeyValue(implicitClassKeyType: IrType?): IrAnnotation {
+  if (!isImplicitClassKeySentinel(ir)) return this
+  val type = implicitClassKeyType ?: return this
+  val copied = ir.deepCopyWithSymbols()
+  populateImplicitClassKey(copied, type)
+  return IrAnnotation(copied)
+}
+
 private fun IrAnnotationContainer?.annotationsAnnotatedWith(
   annotationsToLookFor: Collection<ClassId>
 ): Set<IrConstructorCall> {

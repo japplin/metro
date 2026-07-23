@@ -23,20 +23,19 @@ import dev.zacsweers.metro.compiler.fir.classIds
 import dev.zacsweers.metro.compiler.fir.copyParameters
 import dev.zacsweers.metro.compiler.fir.findInjectLikeConstructors
 import dev.zacsweers.metro.compiler.fir.generateMemberFunction
-import dev.zacsweers.metro.compiler.fir.hasImplicitClassKey
 import dev.zacsweers.metro.compiler.fir.hasOrigin
 import dev.zacsweers.metro.compiler.fir.isAnnotatedWithAny
 import dev.zacsweers.metro.compiler.fir.isBindingContainer
 import dev.zacsweers.metro.compiler.fir.isKiaIntoMultibinding
 import dev.zacsweers.metro.compiler.fir.isResolved
 import dev.zacsweers.metro.compiler.fir.mapKeyAnnotation
-import dev.zacsweers.metro.compiler.fir.mapKeyClassValueExpression
 import dev.zacsweers.metro.compiler.fir.markAsDeprecatedHidden
 import dev.zacsweers.metro.compiler.fir.metroFirBuiltIns
 import dev.zacsweers.metro.compiler.fir.predicates
 import dev.zacsweers.metro.compiler.fir.qualifierAnnotation
 import dev.zacsweers.metro.compiler.fir.replaceAnnotationsSafe
 import dev.zacsweers.metro.compiler.fir.resolveDefaultBindingTypeKey
+import dev.zacsweers.metro.compiler.fir.resolveContributionMapKey
 import dev.zacsweers.metro.compiler.fir.resolvedBindingArgument
 import dev.zacsweers.metro.compiler.fir.resolvedClassId
 import dev.zacsweers.metro.compiler.fir.resolvedScopeClassId
@@ -60,9 +59,9 @@ import org.jetbrains.kotlin.fir.expressions.FirAnnotation
 import org.jetbrains.kotlin.fir.expressions.FirAnnotationCall
 import org.jetbrains.kotlin.fir.expressions.FirGetClassCall
 import org.jetbrains.kotlin.fir.expressions.FirLiteralExpression
-import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationArgumentMapping
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationCallCopy
 import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationCopy
+import org.jetbrains.kotlin.fir.expressions.builder.buildAnnotationArgumentMapping
 import org.jetbrains.kotlin.fir.expressions.builder.buildLiteralExpression
 import org.jetbrains.kotlin.fir.expressions.toReference
 import org.jetbrains.kotlin.fir.extensions.ExperimentalTopLevelDeclarationsGenerationApi
@@ -495,47 +494,12 @@ internal class ContributionsFirGenerator(
         is Contribution.ContributesIntoSetBinding -> add(buildIntoSetAnnotation())
         is Contribution.ContributesIntoMapBinding -> {
           add(buildIntoMapAnnotation())
-          // Copy map key annotation (already resolved on the contribution)
-          val mapKey = matchingContribution.mapKey
-          mapKey?.fir?.expectAsOrNull<FirAnnotationCall>()?.let { mapKeyFirAnnotation ->
-            // For implicit class keys (@MapKey(implicitClassKey = true)), the annotation
-            // value is Nothing::class (sentinel) or absent. Build a new annotation with the
-            // contributing class as the value instead of copying the sentinel.
-            var added = false
-            if (mapKey.hasImplicitClassKey(session)) {
-              val valueExpr = mapKey.mapKeyClassValueExpression()
-              val valueClassId = valueExpr?.resolvedClassId() ?: StandardClassIds.Nothing
-              if (valueClassId == StandardClassIds.Nothing) {
-                // It's the sentinel or omitted, so use the annotated class
-                mapKeyFirAnnotation.toAnnotationClass(session)?.let { mapKeyClass ->
-                  add(
-                    buildSimpleAnnotation { mapKeyClass.symbol }
-                      .apply {
-                        replaceArgumentMapping(
-                          buildAnnotationArgumentMapping {
-                            mapping[StandardNames.DEFAULT_VALUE_PARAMETER] =
-                              buildClassReference(session, contributingClassSymbol.classId)
-                          }
-                        )
-                      }
-                  )
-                  added = true
-                }
-              } else {
-                // Explicit value provided, just copy below
+          matchingContribution.mapKey?.fir?.let { mapKey ->
+            add(
+              buildAnnotationCopy(mapKey) {
+                source = mapKey.source?.fakeElement(pluginGeneratedSourceElementKind)
               }
-            } else {
-              // Regular map key, copy below
-            }
-
-            if (!added) {
-              add(
-                buildAnnotationCallCopy(mapKeyFirAnnotation) {
-                  source = mapKeyFirAnnotation.source?.fakeElement(pluginGeneratedSourceElementKind)
-                  containingDeclarationSymbol = function.symbol
-                }
-              )
-            }
+            )
           }
         }
         is Contribution.ContributesBinding -> {}
@@ -701,16 +665,14 @@ internal class ContributionsFirGenerator(
   ): Contribution.BindingAnnotations {
     val (boundTypeRef, defaultBindingQualifier) =
       resolveBoundTypeRef(contributingClassSymbol, annotation)
-    val boundTypeAnnotations = boundTypeRef?.annotations
     val classAnnotations = contributingClassSymbol.resolvedCompilerAnnotationsWithClassIds
+    val mapKey = contributingClassSymbol.resolveContributionMapKey(annotation, session)
     return Contribution.BindingAnnotations(
       qualifier =
-        boundTypeAnnotations?.qualifierAnnotation(session)
+        boundTypeRef?.annotations?.qualifierAnnotation(session)
           ?: defaultBindingQualifier
           ?: classAnnotations.qualifierAnnotation(session),
-      mapKey =
-        boundTypeAnnotations?.mapKeyAnnotation(session)
-          ?: classAnnotations.mapKeyAnnotation(session),
+      mapKey = mapKey,
     )
   }
 

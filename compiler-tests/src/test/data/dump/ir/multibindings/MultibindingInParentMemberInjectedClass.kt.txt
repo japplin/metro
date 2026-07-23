@@ -204,8 +204,8 @@ class AViewModel : ViewModel {
       @Binds
       @IntoMap
       @ClassKey(value = AViewModel::class)
-      @CallableMetadata(callableName = "bindIntoMapAsViewModel2182965618", propertyName = "", startOffset = -1, endOffset = -1)
-      fun bindIntoMapAsViewModel21829656184203417713_intomap(instance: AViewModel): ViewModel {
+      @CallableMetadata(callableName = "bindIntoMapAsViewModel4203417713", propertyName = "", startOffset = -1, endOffset = -1)
+      fun bindIntoMapAsViewModel42034177134203417713_intomap(instance: AViewModel): ViewModel {
         return error(message = "Never called")
       }
 
@@ -215,7 +215,7 @@ class AViewModel : ViewModel {
     @Binds
     @ClassKey(value = AViewModel::class)
     @ComptimeOnly
-    fun bindIntoMapAsViewModel2182965618(instance: AViewModel): ViewModel {
+    fun bindIntoMapAsViewModel4203417713(instance: AViewModel): ViewModel {
       return error(message = "Never called")
     }
 
@@ -442,8 +442,8 @@ class BViewModel : ViewModel {
       @Binds
       @IntoMap
       @ClassKey(value = BViewModel::class)
-      @CallableMetadata(callableName = "bindIntoMapAsViewModel386014259", propertyName = "", startOffset = -1, endOffset = -1)
-      fun bindIntoMapAsViewModel3860142592406466354_intomap(instance: BViewModel): ViewModel {
+      @CallableMetadata(callableName = "bindIntoMapAsViewModel2406466354", propertyName = "", startOffset = -1, endOffset = -1)
+      fun bindIntoMapAsViewModel24064663542406466354_intomap(instance: BViewModel): ViewModel {
         return error(message = "Never called")
       }
 
@@ -453,7 +453,7 @@ class BViewModel : ViewModel {
     @Binds
     @ClassKey(value = BViewModel::class)
     @ComptimeOnly
-    fun bindIntoMapAsViewModel386014259(instance: BViewModel): ViewModel {
+    fun bindIntoMapAsViewModel2406466354(instance: BViewModel): ViewModel {
       return error(message = "Never called")
     }
 
