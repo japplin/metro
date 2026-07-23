@@ -1108,14 +1108,14 @@ internal class ContributionsFirGenerator(
       /** Resolved qualifier annotation, checking binding type ref first then class declaration. */
       val qualifier: MetroFirAnnotation?
 
-      /** Resolved map key annotation, checking binding type ref first then class declaration. */
+      /** Resolved map key, checking implementation-site declarations before default bindings. */
       val mapKey: MetroFirAnnotation?
     }
 
     data class ContributesTo(override val origin: ClassId) : Contribution
 
     /**
-     * Qualifier and map key annotations resolved from the binding type ref or class declaration.
+     * Qualifier and map-key metadata resolved from the contribution's binding declarations.
      */
     data class BindingAnnotations(
       val qualifier: MetroFirAnnotation?,

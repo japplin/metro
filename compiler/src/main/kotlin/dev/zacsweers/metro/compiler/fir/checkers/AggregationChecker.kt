@@ -401,19 +401,11 @@ internal object AggregationChecker : FirClassChecker(MppCheckerKind.Common) {
       if (isMapBinding) {
         val resolvedKey = declaration.symbol.resolveContributionMapKey(annotation, session)
         if (resolvedKey == null) {
-          if (explicitBindingType == null) {
-            reporter.reportOn(
-              annotation.source,
-              MetroDiagnostics.AGGREGATION_ERROR,
-              "`@$kind`-annotated class ${declaration.classId.asSingleFqName()} must declare a map key on the class or an explicit bound type but doesn't.",
-            )
-          } else {
-            reporter.reportOn(
-              explicitBindingType.source,
-              MetroDiagnostics.AGGREGATION_ERROR,
-              "`@$kind`-annotated class @${declaration.symbol.classId.asSingleFqName()} must declare a map key but doesn't. Add one on the explicit bound type or the class.",
-            )
-          }
+          reporter.reportOn(
+            explicitBindingType?.source ?: annotation.source,
+            MetroDiagnostics.AGGREGATION_ERROR,
+            "`@$kind`-annotated class @${declaration.symbol.classId.asSingleFqName()} must declare a map key on the class, bound type, or default binding but doesn't.",
+          )
           return false
         }
 

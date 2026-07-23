@@ -320,6 +320,23 @@ interface BaseFactory<T : BaseFactory<T>>
 class HomeFactory(...) : BaseFactory<HomeFactory>
 ```
 
+A `@DefaultBinding` can mark a type parameter as the map key source for contributed
+implementations. A map key explicitly declared on an implementation still takes precedence.
+
+```kotlin
+@DefaultBinding<RouteScreen<*>>
+interface RouteScreen<@ClassKey T : RouteKey>
+
+@ContributesIntoMap(AppScope::class)
+@Inject
+class HomeScreen : RouteScreen<HomeKey> // keyed by HomeKey::class
+
+@ContributesIntoMap(AppScope::class)
+@Inject
+class AlternateScreen : RouteScreen<@ClassKey(AlternateKey::class) HomeKey>
+// keyed by AlternateKey::class
+```
+
 ## `generateContributionProviders`
 
 If you enable the new `generateContributionProviders` feature, Metro will instead generate top-level `@Provides` declarations that mirror the injected class's inputs but only return its _bound type_. This means the annotated class can remain `internal`, which both helps encapsulation and incremental compilation.

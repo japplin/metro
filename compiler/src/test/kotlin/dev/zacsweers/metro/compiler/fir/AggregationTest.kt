@@ -2489,7 +2489,7 @@ class AggregationTest : MetroCompilerTest() {
       expectedExitCode = KotlinCompilation.ExitCode.COMPILATION_ERROR,
     ) {
       assertDiagnostics(
-        "e: ContributedInterface.kt:9:46 `@ContributesIntoMap`-annotated class @test.Impl must declare a map key but doesn't. Add one on the explicit bound type or the class."
+        "e: ContributedInterface.kt:9:46 `@ContributesIntoMap`-annotated class @test.Impl must declare a map key on the class, bound type, or default binding but doesn't."
       )
     }
   }
@@ -2510,7 +2510,7 @@ class AggregationTest : MetroCompilerTest() {
       expectedExitCode = KotlinCompilation.ExitCode.COMPILATION_ERROR,
     ) {
       assertDiagnostics(
-        "e: ContributedInterface.kt:9:1 `@ContributesIntoMap`-annotated class test.Impl must declare a map key on the class or an explicit bound type but doesn't."
+        "e: ContributedInterface.kt:9:1 `@ContributesIntoMap`-annotated class @test.Impl must declare a map key on the class, bound type, or default binding but doesn't."
       )
     }
   }

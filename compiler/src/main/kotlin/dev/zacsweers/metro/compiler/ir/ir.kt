@@ -2223,7 +2223,8 @@ internal fun IrAnnotationContainer.mapKeyAnnotation() =
     ?.let(::IrAnnotation)
 
 /**
- * Resolves the map key for a contributed class.
+ * Resolves the map key for a contributed class. Implementation-site map keys take precedence over
+ * a map key declared on a [dev.zacsweers.metro.DefaultBinding] type parameter.
  */
 context(context: IrMetroContext)
 internal fun IrClass.resolveContributionMapKey(
@@ -2237,6 +2238,22 @@ internal fun IrClass.resolveContributionMapKey(
   superTypes.firstNotNullOfOrNull { it.mapKeyInTypeArguments() }?.let { return it }
 
   mapKeyAnnotation()?.let { mapKey -> return mapKey.withImplicitClassKeyValue(defaultType) }
+
+  for (supertype in superTypes) {
+    val supertypeClass = supertype.rawTypeOrNull() ?: continue
+    if (
+      supertypeClass
+        .annotationsIn(setOf(context.metroSymbols.classIds.defaultBindingAnnotation))
+        .none()
+    ) {
+      continue
+    }
+    val arguments = (supertype as? IrSimpleType)?.arguments.orEmpty()
+    for ((index, typeParameter) in supertypeClass.typeParameters.withIndex()) {
+      val mapKey = typeParameter.mapKeyAnnotation() ?: continue
+      return mapKey.withImplicitClassKeyValue(arguments.getOrNull(index)?.typeOrNull)
+    }
+  }
 
   return null
 }

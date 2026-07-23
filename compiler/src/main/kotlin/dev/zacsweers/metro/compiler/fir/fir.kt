@@ -805,7 +805,8 @@ internal fun List<FirAnnotation>.mapKeyAnnotation(session: FirSession): MetroFir
 /**
  * Resolves a map key for a contribution with this [FirClassSymbol] as its annotated class.
  *
- * Implementation-site map keys take precedence over a class-declared map key.
+ * Implementation-site map keys take precedence over a default-binding type-parameter map key:
+ * explicit binding type, implementation supertype, class declaration, then the default binding.
  */
 internal fun FirClassSymbol<*>.resolveContributionMapKey(
   annotation: FirAnnotation,
@@ -827,6 +828,12 @@ internal fun FirClassSymbol<*>.resolveContributionMapKey(
 
   resolvedCompilerAnnotationsWithClassIds.mapKeyAnnotation(session)?.let { mapKey ->
     return mapKey.withImplicitClassKeyValue(session, classId)
+  }
+
+  for (supertype in supertypes) {
+    val supertypeSymbol = supertype.coneType.toRegularClassSymbol(session) ?: continue
+    if (supertypeSymbol.resolveDefaultBindingType(session) == null) continue
+    supertypeSymbol.mapKeyFromTypeParameter(supertype, session)?.let { return it }
   }
 
   return null
@@ -851,6 +858,34 @@ private fun FirTypeRef.mapKeyInTypeArguments(session: FirSession): MetroFirAnnot
       return mapKey.withImplicitClassKeyValue(session, classId)
     }
     typeRef.mapKeyInTypeArguments(session)?.let { return it }
+  }
+
+  return null
+}
+
+/**
+ * Resolves a map key declared on a default-binding class type parameter against [supertype].
+ */
+private fun FirClassSymbol<*>.mapKeyFromTypeParameter(
+  supertype: FirTypeRef,
+  session: FirSession,
+): MetroFirAnnotation? {
+  val sourceTypeRef = (supertype as? FirResolvedTypeRef)?.delegatedTypeRef ?: supertype
+  val userTypeRef = sourceTypeRef as? FirUserTypeRef ?: return null
+  val arguments = userTypeRef.qualifier.lastOrNull()?.typeArgumentList?.typeArguments ?: return null
+  val resolvedArguments = (supertype.coneTypeOrNull as? ConeClassLikeType)?.typeArguments.orEmpty()
+
+  for ((index, typeParameter) in typeParameterSymbols.withIndex()) {
+    val mapKey = typeParameter.resolvedCompilerAnnotationsWithClassIds.mapKeyAnnotation(session)
+      ?: continue
+    val typeRef = (arguments.getOrNull(index) as? FirTypeProjectionWithVariance)?.typeRef
+    val classId =
+      typeRef?.coneTypeOrNull?.toRegularClassSymbol(session)?.classId
+        ?: (resolvedArguments.getOrNull(index) as? ConeKotlinTypeProjection)
+          ?.type
+          ?.toRegularClassSymbol(session)
+          ?.classId
+    return mapKey.withImplicitClassKeyValue(session, classId)
   }
 
   return null

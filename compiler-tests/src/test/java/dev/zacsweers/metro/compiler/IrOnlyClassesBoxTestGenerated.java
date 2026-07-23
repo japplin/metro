@@ -129,6 +129,12 @@ public class IrOnlyClassesBoxTestGenerated extends AbstractIrOnlyClassesBoxTest 
     }
 
     @Test
+    @TestMetadata("ContributesIntoMap_DefaultBindingClassKeyMultiModule.kt")
+    public void testContributesIntoMap_DefaultBindingClassKeyMultiModule() {
+      run("ContributesIntoMap_DefaultBindingClassKeyMultiModule.kt");
+    }
+
+    @Test
     @TestMetadata("ContributingMultibileNullableBindings.kt")
     public void testContributingMultibileNullableBindings() {
       run("ContributingMultibileNullableBindings.kt");

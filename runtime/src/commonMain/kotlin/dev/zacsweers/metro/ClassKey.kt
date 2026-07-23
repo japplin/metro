@@ -18,7 +18,8 @@ package dev.zacsweers.metro
 import kotlin.reflect.KClass
 
 /**
- * A [MapKey] annotation for maps with `KClass<*>` keys.
+ * A [MapKey] annotation for maps with `KClass<*>` keys. It can also mark a type parameter in a
+ * [DefaultBinding] as the source of an implicit class key for contributed implementations.
  *
  * If your map's keys can be constrained, consider using a custom annotation instead, with a member
  * whose type is `KClass<out Something>`.
@@ -33,6 +34,7 @@ import kotlin.reflect.KClass
   AnnotationTarget.PROPERTY_GETTER,
   AnnotationTarget.CLASS,
   AnnotationTarget.TYPE,
+  AnnotationTarget.TYPE_PARAMETER,
 )
 @Retention(AnnotationRetention.RUNTIME)
 @MapKey(implicitClassKey = true)
